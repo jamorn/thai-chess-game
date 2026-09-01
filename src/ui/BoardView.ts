@@ -5,6 +5,23 @@ import { Move } from "../domain/models/Move";
 import { Position } from "../domain/models/Position";
 import { TrashTalker } from "./TrashTalker";
 
+// Import ภาพหมาก (ชุดเดียว สีดำ) จาก src/assets
+import biaImg from "../assets/Bia.webp";
+import khonImg from "../assets/Khon.webp";
+import khunImg from "../assets/Khun.webp";
+import maImg from "../assets/Ma.webp";
+import metImg from "../assets/Met.webp";
+import rueaImg from "../assets/Ruea.webp";
+
+const PIECE_IMAGE_MAP: Record<string, string> = {
+  PAWN: biaImg,
+  KHON: khonImg,
+  KING: khunImg,
+  HORSE: maImg,
+  MET: metImg,
+  ROOK: rueaImg,
+};
+
 export class BoardView {
   private container: HTMLElement;
   private selectedPos: Position | null = null;
@@ -35,7 +52,20 @@ export class BoardView {
         if (piece) {
           const pieceEl = document.createElement("div");
           pieceEl.className = `piece-${piece.side.toLowerCase()}`;
-          pieceEl.textContent = this.getSymbol(piece.type);
+          const img = document.createElement("img");
+          img.src = PIECE_IMAGE_MAP[piece.type] || "";
+          img.alt = this.getSymbol(piece.type);
+          img.classList.add("piece-img");
+          // ขนาดภาพควบคุมด้วย CSS (responsive) ไม่กำหนด fix ที่นี่
+          // ใช้ภาพสีดำชุดเดียว: ฝั่ง RED ย้อมเป็นแดงเข้ม + ขอบดำ เพื่อตัออกจาก cell
+          if (piece.side === Side.RED) {
+            img.style.filter =
+              "invert(1) sepia(1) saturate(8) hue-rotate(-5deg) brightness(0.8) contrast(1.6) drop-shadow(1px 1px 0 rgba(0,0,0,0.9)) drop-shadow(-1px -1px 0 rgba(0,0,0,0.9))";
+          } else {
+            // ฝั่ง BLACK: เพิ่ม drop-shadow สีขาวเพื่อแยกจากพื้นหลังกระดาน
+            img.style.filter = "drop-shadow(0 0 1px rgba(255,255,255,0.6))";
+          }
+          pieceEl.appendChild(img);
           td.appendChild(pieceEl);
         }
 
