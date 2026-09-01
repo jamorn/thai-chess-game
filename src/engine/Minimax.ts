@@ -10,7 +10,7 @@ import { DEFAULT_SEARCH_DEPTH, DRAW_SCORE, MATE_SCORE } from "./engineConfig";
  * สุดความลึกของ Quiescence Search (จำกัดเส้นสาย capture ต่อเนื่อง)
  * เพื่อกันไม่ให้ QS วิ่งลึกเกินไปจนกินเวลา (ไม่มีวันจบ)
  */
-const QS_EXTENSION_LIMIT = 3;
+const QS_EXTENSION_LIMIT = 2;
 
 /** Margin ส่วนต่ำสำหรับ Delta Pruning (กันตัดผิดกรณี eval ใกล้กัน) */
 const DELTA_MARGIN = 200;
