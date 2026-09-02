@@ -346,6 +346,7 @@ export class MinimaxEngine {
     ply: number = 0,
   ): number {
     const side = this.currentSide(isMaximizing, aiSide);
+
     // ที่ ply 0 (leaf ของ main search) ใช้ full evaluation มี mobility/pawn structure
     // ที่ recursion ลึกลงไป (สาย capture ต่อ) ใช้ evaluateStatic แบบเบาเพื่อเร็ว
     const staticEval =
@@ -364,17 +365,22 @@ export class MinimaxEngine {
 
     if (ply >= QS_EXTENSION_LIMIT) return staticEval;
 
-    // สำรวจเฉพาะ capture (+ promotion) ไม่ขยาย quiet moves
-    const captures = board
-      .getLegalMovesForSide(side)
-      .filter((m) => m.capturedPiece !== undefined || m.isPromotion);
+    // ✅ แก้ไข: ถ้าถูก Check ต้องขยายทุก legal move (ไม่ใช่แค่ captures)
+    // เพราะทางออกเดียวอาจเป็นการเดินขุนหนี (Quiet Move) ซึ่งต้องถูกประเมินต่อ
+    const inCheck = board.isKingInCheck(side);
+    const moves = inCheck
+      ? board.getLegalMovesForSide(side) // ถูก check → ต้องขยายทุกตา (เดินขุนหนี, บล็อก, หรือกิน)
+      : board
+          .getLegalMovesForSide(side)
+          .filter((m) => m.capturedPiece !== null || m.isPromotion); // ไม่ถูก check → ขยายเฉพาะตากิน
 
     let bestValue = staticEval;
 
     if (isMaximizing) {
-      for (const move of captures) {
-        // Delta Pruning (maximizing): static + ค่ากินได้สูงสุดก็ยังสู้ alpha ไม่ได้
+      for (const move of moves) {
+        // ✅ Delta Pruning: ใช้ได้เฉพาะเมื่อ "ไม่ถูก Check" เท่านั้น
         if (
+          !inCheck &&
           move.capturedPiece &&
           staticEval +
             Evaluator.getMaxCapturableValue(board, side) +
@@ -383,7 +389,6 @@ export class MinimaxEngine {
         ) {
           continue;
         }
-
         board.makeMove(move);
         const score = this.quiescence(
           board,
@@ -394,15 +399,15 @@ export class MinimaxEngine {
           ply + 1,
         );
         board.undoMove(move);
-
         if (score > bestValue) bestValue = score;
         if (score > alpha) alpha = score;
         if (beta <= alpha) break;
       }
     } else {
-      for (const move of captures) {
-        // Delta Pruning (minimizing): static - ค่าเสียสูงสุดยังสู้ beta ไม่ได้
+      for (const move of moves) {
+        // ✅ Delta Pruning: ใช้ได้เฉพาะเมื่อ "ไม่ถูก Check" เท่านั้น
         if (
+          !inCheck &&
           move.capturedPiece &&
           staticEval -
             Evaluator.getMaxCapturableValue(board, side) -
@@ -411,7 +416,6 @@ export class MinimaxEngine {
         ) {
           continue;
         }
-
         board.makeMove(move);
         const score = this.quiescence(
           board,
@@ -422,7 +426,6 @@ export class MinimaxEngine {
           ply + 1,
         );
         board.undoMove(move);
-
         if (score < bestValue) bestValue = score;
         if (score < beta) beta = score;
         if (beta <= alpha) break;

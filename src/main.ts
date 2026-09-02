@@ -1,3 +1,4 @@
+// src/main.ts
 import { Board } from "./domain/Board";
 import { Side } from "./domain/enums/Side";
 import { Move } from "./domain/models/Move";
@@ -19,14 +20,11 @@ class ThaiChessApp {
   constructor() {
     this.board = new Board();
     this.board.setupDefaultBoard();
-
     this.boardView = new BoardView("board-container");
     this.historyView = new MoveHistoryView("history-list");
-
     this.aiEngine = new AiEngine((bestMoveData) => {
       this.handleAiBestMove(bestMoveData);
     });
-
     this.init();
   }
 
@@ -39,11 +37,8 @@ class ThaiChessApp {
     if (this.currentTurn !== Side.RED) return;
     if (this.isGameOver()) return;
 
-    // เดินหมากของผู้เล่นก่อน (จะมีการสลับ currentTurn ไปเป็น BLACK ใน executeMove)
     this.executeMove(move);
 
-    // คำนวณฝั่งถัดไปจากหมากที่เดิน เพื่อส่ง AI ต่อไป (หลีกเลี่ยงการเปรียบเทียบ
-    // this.currentTurn ที่ถูก narrow ตั้งแต่ if ข้างบน)
     const nextSide = move.piece.side === Side.RED ? Side.BLACK : Side.RED;
     if (this.currentTurn === nextSide && !this.isGameOver()) {
       TrashTalker.showStatus("status-bar", "AI กำลังคิด...");
@@ -51,14 +46,16 @@ class ThaiChessApp {
     }
   }
 
-  /** เช็คว่าเกมจบแล้วหรือยัง (เพื่อไม่ให้เดินหมากต่อหลังจากชนะ/เสมอ) */
   private isGameOver(): boolean {
-    return this.board.getGameState(this.currentTurn) !== GameState.IN_PROGRESS;
+    // ✅ แก้ไข: ส่ง history เข้าไปตรวจ repetition
+    return (
+      this.board.getGameState(this.currentTurn, this.history) !==
+      GameState.IN_PROGRESS
+    );
   }
 
   private handleAiBestMove(bestMoveData: BestMoveData | null): void {
     if (!bestMoveData) return;
-
     const moves = this.board.getLegalMovesForSide(Side.BLACK);
     const selected = moves.find(
       (m) =>
@@ -67,7 +64,6 @@ class ThaiChessApp {
         m.to[0] === bestMoveData.to[0] &&
         m.to[1] === bestMoveData.to[1],
     );
-
     if (selected && this.currentTurn === Side.BLACK) {
       this.executeMove(selected);
     }
@@ -78,19 +74,19 @@ class ThaiChessApp {
     this.history.push(move);
     this.historyView.addMove(move, this.history.length);
 
-    // สลับ Turn
     this.currentTurn = this.currentTurn === Side.RED ? Side.BLACK : Side.RED;
     this.boardView.render(this.board, this.currentTurn);
 
-    // ตรวจจับสถานะเกมของฝั่งที่ถึงตาเดิน
-    const state = this.board.getGameState(this.currentTurn);
+    // ✅ แก้ไข: ส่ง history เข้าไปตรวจ repetition
+    const state = this.board.getGameState(this.currentTurn, this.history);
+
     if (state === GameState.CHECKMATE) {
       const winner = this.currentTurn === Side.RED ? "ดำ" : "แดง";
       TrashTalker.showStatus("status-bar", `รุกจน! ${winner} ชนะ`);
     } else if (state === GameState.STALEMATE) {
       TrashTalker.showStatus("status-bar", "เสมอ (เดินไม่ได้)");
     } else if (state === GameState.DRAW) {
-      TrashTalker.showStatus("status-bar", "เสมอ (หมากไม่พอ)");
+      TrashTalker.showStatus("status-bar", "เสมอ (หมากไม่พอ หรือ เดินซ้ำ)");
     } else if (this.board.isKingInCheck(this.currentTurn)) {
       TrashTalker.showStatus("status-bar", "รุก!");
     }

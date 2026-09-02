@@ -96,10 +96,8 @@ export class Board {
         const piece = this.grid[r][c];
         if (piece && piece.side === side) {
           const possiblePositions = piece.getPossibleMoves([r, c], this);
-
           for (const pos of possiblePositions) {
             const captured = this.grid[pos[0]][pos[1]];
-
             // ไม่สามารถกินขุนของฝั่งตรงข้ามได้ (ขุนจะถูกโคนจนแทน)
             if (captured && captured.type === PieceType.KING) continue;
 
@@ -108,7 +106,6 @@ export class Board {
               Board.isPromotionRank(side, pos[0]);
 
             const move = new Move([r, c], pos, piece, captured, isPromotion);
-
             this.makeMove(move);
             if (!this.isKingInCheck(side)) {
               legalMoves.push(move);
@@ -124,10 +121,8 @@ export class Board {
 
   /**
    * นับจำนวน "Pseudo-Legal" moves ของฝั่งที่กำหนด (ค่า Mobility แบบหลวม ๆ)
-   * ------------------------
    * การหา Legal Moves เต็มรูปแบบมี overhead สูงเพราะต้องเรียก makeMove + isKingInCheck
    * ซึ่งต้องทำ Ray-casting + ตรวจ In-Check ซ้ำทุกช่อง ทุก leaf node ของ search tree
-   *
    * ในทางปฏิบัติค่าจำนวนช่องที่หมาก "แตะถึงได้" (ไม่ข้ามหมาก แต่ไม่ตรวจว่าขุนจะโดนรุก)
    * ก็เพียงพอจะใช้ประเมิน "การควบคุมพื้นที่/โอกาส" (Space Advantage/Mobility) แล้ว
    * และลด overhead ลงได้มาก เพราะไม่ต้อง make/undo + isKingInCheck ทุกครั้ง
@@ -153,9 +148,63 @@ export class Board {
     return count;
   }
 
-  /** ตรวจสอบสถานะเกมสำหรับฝั่งที่ถึงตาเดิน */
-  public getGameState(sideToMove: Side): GameState {
+  /**
+   * ✅ ใหม่: ตรวจจับ Threefold Repetition (เดินซ้ำ 3 ครั้ง = เสมอ)
+   * ตรวจสอบว่าตำแหน่งปัจจุบันเกิดขึ้นอย่างน้อย 3 ครั้งใน history
+   */
+  public isThreefoldRepetition(history: Move[]): boolean {
+    if (history.length < 6) return false; // ต้องมีอย่างน้อย 3 ตาของแต่ละฝั่ง
+
+    // สร้าง fingerprint ของตำแหน่งปัจจุบัน
+    const currentFingerprint = this.getPositionFingerprint();
+
+    // นับจำนวนครั้งที่ตำแหน่งนี้เกิดขึ้นใน history
+    let count = 0;
+    const tempBoard = new Board();
+    tempBoard.setupDefaultBoard();
+
+    // ตรวจตำแหน่งเริ่มต้น
+    if (tempBoard.getPositionFingerprint() === currentFingerprint) {
+      count++;
+    }
+
+    // ตรวจทุกตำแหน่งใน history
+    for (const move of history) {
+      tempBoard.makeMove(move);
+      if (tempBoard.getPositionFingerprint() === currentFingerprint) {
+        count++;
+        if (count >= 3) return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * ✅ ใหม่: สร้าง fingerprint ของตำแหน่งกระดาน (สำหรับตรวจจับ repetition)
+   * ใช้ string representation ของกระดาน
+   */
+  private getPositionFingerprint(): string {
+    const parts: string[] = [];
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const piece = this.grid[r][c];
+        if (piece) {
+          parts.push(`${r}${c}${piece.side[0]}${piece.type[0]}`);
+        }
+      }
+    }
+    return parts.sort().join("|");
+  }
+
+  /**
+   * ✅ แก้ไข: เพิ่มการตรวจ repetition ใน getGameState
+   */
+  public getGameState(sideToMove: Side, history: Move[] = []): GameState {
     if (this.hasInsufficientMaterial()) return GameState.DRAW;
+
+    // ✅ ใหม่: ตรวจ Threefold Repetition
+    if (this.isThreefoldRepetition(history)) return GameState.DRAW;
 
     const hasAnyMove = this.getLegalMovesForSide(sideToMove).length > 0;
     if (hasAnyMove) return GameState.IN_PROGRESS;
@@ -222,6 +271,7 @@ export class Board {
 
     const [kr, kc] = kingPos;
     const enemySide = side === Side.RED ? Side.BLACK : Side.RED;
+
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
         const piece = this.grid[r][c];

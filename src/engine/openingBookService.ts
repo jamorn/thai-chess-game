@@ -90,14 +90,26 @@ function hasMovedOffStartZone(board: Board, side: Side): boolean {
   const startRank = side === Side.RED ? 7 : 0;
   const pawnRank = side === Side.RED ? 5 : 2;
 
+  // ✅ เพิ่ม: ตรวจจำนวนหมาก (ถ้าถูกกินไป -> ขยับแล้วแน่นอน)
+  const expectedPieceCount = 16; // หมากรุกไทยมี 16 ตัวต่อฝั่ง
+  let actualPieceCount = 0;
+
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
       const p = board.getPieceAt(r, c);
-      if (!p || p.side !== side) continue;
-      const isDefaultZone = r === startRank || r === pawnRank;
-      if (!isDefaultZone) return true; // หมากไปอยู่นอกแถวตั้งต้น -> ขยับแล้ว
+      if (p && p.side === side) {
+        actualPieceCount++;
+
+        // ตรวจว่าหมากอยู่นอกแถวตั้งต้นไหม
+        const isDefaultZone = r === startRank || r === pawnRank;
+        if (!isDefaultZone) return true; // หมากไปอยู่นอกแถวตั้งต้น -> ขยับแล้ว
+      }
     }
   }
+
+  // ✅ ถ้าจำนวนหมากน้อยกว่าค่าตั้งต้น -> แสดงว่าถูกกินไป -> ขยับแล้ว
+  if (actualPieceCount < expectedPieceCount) return true;
+
   return false;
 }
 
