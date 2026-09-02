@@ -7,6 +7,7 @@
 ## 🎯 ฟีเจอร์หลัก (Key Features)
 
 - **Pure TypeScript & Strict OOP Architecture:** สถาปัตยกรรมแบบแยกส่วน (Decoupled Domain, Engine, and UI) ดูแลรักษาง่าย และขยายต่อสะดวก
+- **AI Opening Book (หลักครูพงษ์):** ตอบโต้ตาเปิดเกม (3-5 ตาแรก) ได้ทันที (~0ms) ด้วยสมุดเปิดหมากรุกไทย ตาม "หลักการเปิดเกม 10 ประการ" พร้อม **Weighted Randomness** เพื่อไม่ให้ AI เดินซ้ำเดิมทุกเกม
 - **Win95 Nostalgia Trash Talker:** ระบบสุ่มข้อความปั่นประสาทผู้เล่นระดับตำนาน เช่น _"อย่าคิดสั้น!"_, _"เปิดหน้าขุนเฉยเลย"_ เมื่อผู้เล่นเดินพลาด
 - **Non-blocking Multi-threaded AI:** ประมวลผล Minimax Search บน **Web Worker** แยกต่างหาก ทำให้ UI ลื่นไหลตลอดเวลาแม้ AI กำลังคิดลึก
 - **Undo & Replay System:** บันทึก Move History เพื่อย้อนดูสายการเดินแบบย้อนกลับ (Reverse Engineering) สำหรับศึกษาเกม
@@ -39,6 +40,14 @@
 
 AI ของโปรแกรมนี้ถอดแบบลอจิกมาจากโปรแกรมหมากรุกไทยภาษา C ยุค Win95 แต่เสริมความแม่นยำและความเร็วด้วยเทคนิค Mini AI สมัยใหม่:
 
+### 0. Opening Book (เปิดเกม) — ตอบสนองทันที
+
+- **สมุดเปิดหมาก** อ้างอิง "หลักการเปิดเกมหมากรุกไทย 10 ประการ" ของครูพงษ์
+- จำข้อมูลตาเปิด (ม้า ง2, โคน ฉ7, ลำดับพัฒนาโคน-เม็ด-ม้า, เบี้ยกลาง) สำหรับทั้ง 2 ฝั่ง
+- AI เลือกตา **Weighted Random** จากตัวเลือกที่ดี 2-3 ทาง ต่อสถานะ เพื่อไม่ให้เล่นซ้ำเดิม
+- **ตอบได้ทันที ~0ms** (ดึงจาก Object ในหน่วยความจำ ไม่ต้องคำนวณ Minimax Tree)
+- เมื่อพ้นช่วงเปิด/ไม่มีใน Book → ตกไปใช้ Minimax ตามปกติ
+
 ### 1. Core Logic (Win95 Classic)
 
 - **Minimax Algorithm:** จำลองการเดินหมากแบบต้นไม้การตัดสินใจ (Decision Tree) สลับฝั่งบุก/รับ
@@ -49,14 +58,17 @@ AI ของโปรแกรมนี้ถอดแบบลอจิกม�
 
 - **Iterative Deepening Search (IDS):** ค่อยๆ ค้นหาความลึกทีละระดับ ($1 \rightarrow 2 \rightarrow ... \rightarrow N$) ช่วยให้ได้รับตาเดินที่ดีเบื้องต้นเอาไปตัดสาย Alpha-Beta ในชั้นลึกๆ ได้เร็วขึ้นทวีคูณ
 - **MVV-LVA Move Ordering:** เรียงลำดับคิวการคำนวณจากตาจับกิน _Most Valuable Victim - Least Valuable Attacker_ (เอาตัวเล็กกินตัวใหญ่ก่อน) ทำให้เกิดการตัดกิ่ง (Cutoff) ได้ตั้งแต่ต้นกิ่งก้าน
+- **Pseudo-Legal Mobility + Lazy Evaluation:** ประเมินความคล่องตัว (Mobility) ด้วยการนับช่องที่หมาก "แตะถึงได้" (ไม่ต้องตรวจ King in Check ทุก leaf) และใช้ Lazy Evaluation ข้ามการประเมินตำแหน่งเมื่อผลต่าง Material+PST ห่างกันมาก (Lazy Threshold) — ส่งผลให้ **Depth 4 กลางเกมคิดได้ ~1.4 วินาที** (ลดจากเดิม ~5.4 วินาที)
 
 ---
 
 ## 🧪 การทดสอบ (Testing with Vitest)
 
-โปรเจกต์มี **Unit Test** ทั้งสิ้น 20+ test cases ครอบคลุม:
+โปรเจกต์มี **Unit Test** ทั้งหมด 35 test cases ครอบคลุม:
 
 - **Minimax Engine:** ตรวจสอบตาเดินของ AI, การเลือกกินหมากคุ้มค่า (capture) ผ่าน `capturedPiece` โดยตรง, และคืน `null` เมื่อถูกโคนจน
+- **Opening Book:** ตรวจ `detectOpeningKey` (ตรวจจับช่วงเปิด START / "1r"), `getBookBestMove` (คืน move ที่ถูกกฎหมาย), และตรวจว่าพิกัดทุกรายการใน `OPENING_BOOK` เป็น move ที่เดินได้จริง
+- **Evaluator (หลักครูพงษ์ 5/9/10):** ตรวจ Rook on Open File, Center Control, และ Penalty เบี้ยดันลึกเกินจำเป็น
 - **Game State:** ตรวจจับ `CHECKMATE`, `STALEMATE`, `DRAW` (insufficient material) และ `IN_PROGRESS`
 - **Movement Rules:** ตรวจการเดินของทุกหมากตามกฎ
   - **Rook blocking:** เดินจนกว่าจะเจอหมากขวาง, กินแล้วหยุด, เดินถึงขอบกระดานได้เมื่อว่าง
@@ -66,12 +78,18 @@ AI ของโปรแกรมนี้ถอดแบบลอจิกม�
   - **No Palace Rule:** ยืนยันว่าหมากเดินทั่วกระดานได้ตามหมากรุกไทย
 
 ```bash
-# รันเทสครั้งเดียว
+# รันเทสครั้งเดียว (เอ็นจินหลัก + เปิดเกม — ไม่รวม benchmark ที่ใช้เวลานาน)
 npm test
 
 # รันแบบ Watch (รีรันทุกครั้งที่แก้ไฟล์)
 npm run test:watch
+
+# รันชุด benchmark เวลาคิดของ AI (แยกจาก CI หลัก เนื่องจากใช้เวลานาน)
+npm run test:perf
 ```
+
+> **หมายเหตุเรื่อง script:** `npm test` รันเฉพาะ test ที่เร็ว (Minimax + Opening Book) ไม่รวม benchmark
+> ส่วน `npm run test:perf` ใช้ไฟล์ `src/engine/__tests__/perf/aiPerformance.test.ts` สำหรับเทียบเวลากลางเกมตาม Depth
 
 ---
 
@@ -83,7 +101,7 @@ npm run test:watch
 2. แคชพึ่งพา (dependencies) เพื่อความเร็ว
 3. รัน `npm install`
 4. ตรวจสอบ TypeScript ด้วย `tsc --noEmit`
-5. รันชุดทดสอบทั้งหมดด้วย `npm test`
+5. รันชุดทดสอบด้วย `npm test` (เฉพาะ test ที่เร็ว: Minimax + Opening Book — ไม่รวม benchmark)
 6. Build production bundle ด้วย `npm run build`
 
 ทุกขั้นตอนต้องผ่านหมด (สีเขียว) ถึงจะถือว่า merge ได้ — ดูผลที่แท็บ **Actions**
@@ -104,7 +122,10 @@ thai-chess-game/
 │       └── ci.yml                # GitHub Actions CI อัตโนมัติ
 ├── Docs/
 │   ├── fix.md                     # บันทึกการแก้บั๊ก / คำแนะนำ
-│   └── makruk-rule.md             # กติกาการเดินหมากรุกไทย
+│   ├── makruk-rule.md             # กติกาการเดินหมากรุกไทย
+│   ├── problem-solving-log.md     # บันทึกปัญหา & แนวทางแก้ (AI performance)
+│   ├── OPENING_BOOK.MD            # หลักการเปิดเกมครูพงษ์ 10 ข้อ + แนวทาง opening book
+│   └── Casual-Players.md          # ระดับความยากของ AI กับผู้เล่นทั่วไป / เซียน
 └── src/
   ├── main.ts                   # Entry point ตั้งค่า UI และ Events
   ├── domain/                   # Domain Model & Game Rules
@@ -126,17 +147,26 @@ thai-chess-game/
   │   │       └── Pawn.ts
   │   └── Board.ts              # Game Board State & Legal Move Engine
   ├── engine/                   # AI Engine Logic
-  │   ├── Evaluator.ts          # Positional & Material Scoring
-  │   ├── Minimax.ts            # Core Search Engine
+  │   ├── data/
+  │   │   └── openingBook.ts    # สมุดเปิดหมาก (หลักครูพงษ์) + types
+  │   ├── utils/
+  │   │   └── random.ts         # Weighted Random (เลือกตาเดินจาก book)
+  │   ├── engineConfig.ts       # ค่าปรับตั้ง AI (DEFAULT_SEARCH_DEPTH, threshold, ...)
+  │   ├── openingBookService.ts # ตรวจจับช่วงเปิด + ดึง move จาก book แบบ weighted
+  │   ├── Evaluator.ts          # Positional, Material, Mobility (pseudo-legal + lazy)
+  │   ├── Minimax.ts            # Core Search Engine (Alpha-Beta + Iterative Deepening)
   │   ├── AiEngine.ts           # AI Controller
-  │   ├── ai.worker.ts          # Web Worker Thread
+  │   ├── ai.worker.ts          # Web Worker Thread (เช็ค opening book ก่อน)
   │   └── __tests__/
-  │       └── Minimax.test.ts   # Unit Tests (Vitest)
+  │       ├── Minimax.test.ts   # Unit Tests Minimax
+  │       ├── openingBook.test.ts # Unit Tests Opening Book
+  │       └── perf/
+  │           └── aiPerformance.test.ts # Benchmark เวลากลางเกม (npm run test:perf)
   ├── ui/                       # Presentation Layer
   │   ├── BoardView.ts          # DOM/Canvas Renderer
   │   ├── MoveHistoryView.ts    # History & Undo UI
-  │   └── TrashTalker.ts        # Win95 Trash Talker Manager
-      └── Slide.ts
+  │   ├── TrashTalker.ts        # Win95 Trash Talker Manager
+  │   └── Slide.ts
   └── assets/                   # Images and sound effects
 ```
 

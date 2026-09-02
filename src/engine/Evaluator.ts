@@ -105,6 +105,26 @@ export class Evaluator {
   /** ค่า Passed Pawn ต่อแถวที่เข้าใกล้โปรโมต (rowIndex เล็ก = ใกล้โปรโมต) */
   private static readonly PASSED_PAWN_BONUS = 25;
 
+  /** Penalty เบี้ยที่ "ดันลึกเกินจำเป็น" ในช่วงต้น/กลางเกม (ข้อ 5)  */
+  private static readonly PAWN_OVER_EXTENSION_PENALTY = 14;
+
+  /** โบนัสเรือบน Open File (คอลัมน์ไม่มีเบี้ยเลย) (ข้อ 9) */
+  private static readonly ROOK_OPEN_FILE_BONUS = 25;
+
+  /** โบนัสเรือบน Semi-Open File (มีแต่เบี้ยฝั่งตรงข้าม) (ข้อ 9) */
+  private static readonly ROOK_SEMI_OPEN_FILE_BONUS = 12;
+
+  /** 4 ช่องกลางหลัก ที่ใช้เป็นเกณฑ์ "ควบคุมพื้นที่กลาง" (ข้อ 10) */
+  private static readonly CENTER_SQUARES: [number, number][] = [
+    [3, 3],
+    [3, 4],
+    [4, 3],
+    [4, 4],
+  ];
+
+  /** น้ำหนักคะแนนต่อการควบคุมช่องกลาง (ข้อ 10) */
+  private static readonly CENTER_CONTROL_WEIGHT = 8;
+
   /**
    * Lazy Evaluation Threshold
    * ถ้าผลต่าง Material+PST ระหว่างสองฝั่งห่างกันมากเกินไปกว่าค่านี้
@@ -132,6 +152,13 @@ export class Evaluator {
     // Positional features (Mobility / King Safety / Passed Pawn)
     score += this.mobilityScore(board, aiSide);
     score += this.pawnStructureScore(board, aiSide);
+    // หลักครูพงษ์:
+    //  - ข้อ 9: เรือบน Open File
+    //  - ข้อ 10: ควบคุมช่องกลาง
+    //  - ข้อ 5: Penalty เบี้ยที่ดันลึกเกินจำเป็น
+    score += this.rookOpenFileScore(board, aiSide);
+    score += this.centerControlScore(board, aiSide);
+    score += this.pawnOverExtensionScore(board, aiSide);
 
     return score;
   }
@@ -232,6 +259,115 @@ export class Evaluator {
       }
     }
     return false;
+  }
+
+  /**
+   * หลักครูพงษ์ ข้อ 5: Penalty เบี้ยที่ "ดันลึกเกินจำเป็น" ในช่วงต้น/กลางเกม
+   * ------------------------------------------------------------
+   * การเดินเบี้ยหลายเธ/เร็วเกินไปในเกมช่วงที่หมากยังเยอะ เสีย "ทีเดิน" และ
+   * สร้างโพรง (weak squares) ให้ฝั่งตรงข้ามโจมตี หลักการ "อย่าเดินเบี้ยเยอะ"
+   *
+   * จึงหักคะแนนเบี้ยของเรา ที่ขยับไปไกลจากแถวตั้งต้นแล้ว (ตั้งแต่แถวโปรโมต
+   * ของฝั่งตรงข้ามไล่ลงมา) เบาะๆ ในช่วงเกมต้น/กลาง (มีหมาก >= 16 ตัว)
+   *
+   * (public เพื่อให้ test ตรวจค่าได้โดยตรง)
+   */
+  public static pawnOverExtensionScore(board: Board, aiSide: Side): number {
+    const totalPieces = this.countPieces(board);
+    // ช่วงจบเกม (หมากน้อย) เบี้ยเลื่อนลึกเป็นเรื่องปกติ/ดี -> ไม่หัก
+    if (totalPieces < 16) return 0;
+
+    let score = 0;
+
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = board.getPieceAt(r, c);
+        if (!piece || piece.type !== PieceType.PAWN) continue;
+
+        // เบี้ยที่ "ลึกเกิน" = อยู่เลยแถวกลางของตัวเองไป (RED ไปฝั่งศัตรู r<=3,
+        // BLACK ไปฝั่งศัตรู r>=4) => เสียทีเดิน & สร้างช่องอ่อนช่วงต้น/กลางเกม
+        const overExtended = piece.side === Side.RED ? r <= 3 : r >= 4;
+        if (!overExtended) continue;
+
+        const sign = piece.side === aiSide ? 1 : -1;
+        score -= sign * this.PAWN_OVER_EXTENSION_PENALTY;
+      }
+    }
+    return score;
+  }
+
+  /**
+   * หลักครูพงษ์ ข้อ 9: โบนัสเรือบน Open File / Semi-Open File
+   * ------------------------------------------------------------
+   * - Open File: คอลัมน์ที่ไม่มีเบี้ยทั้ง 2 ฝั่ง -> เรือควบคุมทั้งเส้น เปิดบุกชั้นดี
+   * - Semi-Open File: มีเบี้ยแค่ฝั่งตรงข้าม -> ยังมีเป้าโจมตี
+   * - ไม่มีโบนัสถ้าคอลัมน์มีเบี้ยของฝั่งเราเอง (ติดทั้ง 2 ฝั่ง)
+   *
+   * (public เพื่อให้ test ตรวจค่าได้โดยตรง)
+   */
+  public static rookOpenFileScore(board: Board, aiSide: Side): number {
+    let score = 0;
+
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = board.getPieceAt(r, c);
+        if (!piece || piece.type !== PieceType.ROOK) continue;
+
+        const isMine = piece.side === aiSide;
+        const file = this.openFileBonus(board, c, piece.side);
+        score += isMine ? file : -file;
+      }
+    }
+    return score;
+  }
+
+  /** โบนัสของคอลัมน์ (ต่อตัวเรือ) ตามจำนวนเบี้ยที่เหลือในคอลัมน์ */
+  private static openFileBonus(board: Board, col: number, side: Side): number {
+    let friendlyPawn = false;
+    let enemyPawn = false;
+    for (let r = 0; r < 8; r++) {
+      const piece = board.getPieceAt(r, col);
+      if (piece && piece.type === PieceType.PAWN) {
+        if (piece.side === side) friendlyPawn = true;
+        else enemyPawn = true;
+      }
+    }
+    if (!friendlyPawn && !enemyPawn) return this.ROOK_OPEN_FILE_BONUS;
+    if (!friendlyPawn && enemyPawn) return this.ROOK_SEMI_OPEN_FILE_BONUS;
+    return 0;
+  }
+
+  /**
+   * หลักครูพงษ์ ข้อ 10: การควบคุมช่องกลาง (Center Control)
+   * ------------------------------------------------------------
+   * 4 ช่องกลางหลัก (c3,c4,d3,d4 โน้ต row3-4/col3-4) ที่ใครคุมได้ดีกว่ามีความได้เปรียบ
+   * นับจำนวนตัวหมากของฝ่ายนั้นที่สามารถ "และถึง" (pseudo-legal reach) ช่องกลาง
+   * แล้วใช้ผลต่าง my - enemy × weight (เหมือน mobility แต่เจาะจงกลาง)
+   *
+   * (public เพื่อให้ test ตรวจค่าได้โดยตรง)
+   */
+  public static centerControlScore(board: Board, aiSide: Side): number {
+    const enemySide = aiSide === Side.RED ? Side.BLACK : Side.RED;
+    const mine = this.countCenterReachers(board, aiSide);
+    const enemy = this.countCenterReachers(board, enemySide);
+    return (mine - enemy) * this.CENTER_CONTROL_WEIGHT;
+  }
+
+  /** นับจำนวนหมากของ `side` ที่ Reach ไปยังช่องกลางได้ (pseudo-legal) */
+  private static countCenterReachers(board: Board, side: Side): number {
+    let count = 0;
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = board.getPieceAt(r, c);
+        if (!piece || piece.side !== side) continue;
+        const targets = piece.getPossibleMoves([r, c], board);
+        const reachesCenter = targets.some(([tr, tc]) =>
+          this.CENTER_SQUARES.some(([cr, cc]) => cr === tr && cc === tc),
+        );
+        if (reachesCenter) count++;
+      }
+    }
+    return count;
   }
 
   private static findKing(board: Board, side: Side): [number, number] | null {
