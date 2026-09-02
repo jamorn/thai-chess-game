@@ -122,6 +122,37 @@ export class Board {
     return legalMoves;
   }
 
+  /**
+   * นับจำนวน "Pseudo-Legal" moves ของฝั่งที่กำหนด (ค่า Mobility แบบหลวม ๆ)
+   * ------------------------
+   * การหา Legal Moves เต็มรูปแบบมี overhead สูงเพราะต้องเรียก makeMove + isKingInCheck
+   * ซึ่งต้องทำ Ray-casting + ตรวจ In-Check ซ้ำทุกช่อง ทุก leaf node ของ search tree
+   *
+   * ในทางปฏิบัติค่าจำนวนช่องที่หมาก "แตะถึงได้" (ไม่ข้ามหมาก แต่ไม่ตรวจว่าขุนจะโดนรุก)
+   * ก็เพียงพอจะใช้ประเมิน "การควบคุมพื้นที่/โอกาส" (Space Advantage/Mobility) แล้ว
+   * และลด overhead ลงได้มาก เพราะไม่ต้อง make/undo + isKingInCheck ทุกครั้ง
+   */
+  public countPseudoLegalMovesForSide(side: Side): number {
+    let count = 0;
+
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const piece = this.grid[r][c];
+        if (piece && piece.side === side) {
+          const possiblePositions = piece.getPossibleMoves([r, c], this);
+          for (const pos of possiblePositions) {
+            const captured = this.grid[pos[0]][pos[1]];
+            // ไม่นับการ "กินขุน" (ขุนถูกโคนจนแทน มิใช่ถูกกินตรง ๆ)
+            if (captured && captured.type === PieceType.KING) continue;
+            count++;
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
   /** ตรวจสอบสถานะเกมสำหรับฝั่งที่ถึงตาเดิน */
   public getGameState(sideToMove: Side): GameState {
     if (this.hasInsufficientMaterial()) return GameState.DRAW;

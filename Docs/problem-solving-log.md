@@ -78,3 +78,46 @@
 - ถ้าต้องการ depth 4+ แนะนำ **ปรับ mobility ให้เบาก่อน** (ลด bottleneck หลัก)
 - `_perf.test.ts` เป็นเครื่องมือวัด ควรเก็บเพื่อเทียบ tuning ภายหลัง
 - ทั้งหมดนี้อยู่บน branch **`feature/ai-refactor`** (committed + pushed ถึงก่อนหน้านี้)
+
+---
+
+## 6. 🔧 Optimize Mobility (เพื่อปลดล็อก depth 4) — 07/03/2026 08:3x
+
+ทำตามแนวทางที่เสนอ: **Pseudo-Legal Mobility + Lazy Evaluation** (+ จัดการ perf test แยก)
+
+### 6.1 สิ่งที่ทำ
+1. **`Board.countPseudoLegalMovesForSide(side)`** (ใหม่)
+   - นับจำนวนช่องที่หมาก "แตะถึงได้" **ไม่ตรวจ isKingInCheck / ไม่ makeMove+undo**
+   - ลด overhead ของ ray-cast + in-check check ได้มาก
+2. **`Evaluator.mobilityScore()`**: เปลี่ยนจาก `getLegalMovesForSide()` → `countPseudoLegalMovesForSide()`
+3. **`Evaluator.evaluate()`**: เพิ่ม **Lazy Evaluation**
+   - ถ้า `|Material+PST diff| > LAZY_EVAL_THRESHOLD (450)` → ตัดสินด้วย material+PST อย่างเดียว
+   - ข้าม mobility/pawn structure (ไม่กี่แต้มชดเชยหมากที่ต่างกันมากไม่ได้)
+   - ค่าคงที่ `LAZY_EVAL_THRESHOLD = 450` (ราวค่าเรือเดียว)
+4. **`DEFAULT_SEARCH_DEPTH`: 3 → 4** (ได้ผล 1.4s กลางเกม)
+5. **Perf test แยกโฟลเดอร์**: `src/engine/__tests__/perf/aiPerformance.test.ts`
+   - `npm test` = เฉพาะ Minimax.test.ts (CI เร็ว)
+   - `npm run test:perf` = benchmark แยก
+
+### 6.2 ผลลัพธ์ (กลางเกม board เดิม)
+| depth | ก่อน optimize | หลัง PseudoLegal+Lazy |
+|-------|---------------|-------------------------|
+| 3 | ~960 ms | ~960 ms |
+| **4** | **~5,449 ms** | **~1,400 ms** ✅ (ล็อก) |
+| 5 | ~30,000 ms | ~9,100 ms (ยังช้า) |
+
+### 6.3 หมายเหตุ: ทำไมไม่ทำ "Reuse Moves" (ตัว 3)
+- Mobility ถูกใช้เฉพาะที่ **leaf** (depth 0) ผ่าน `quiescence → evaluate`
+- ที่ depth 0 `minimax` ตอนนี้ **return ทันที ก่อนมี moves**
+- จะ Reuse ต้องย้าย generate moves ขั้น depth 0 ขึ้น ทำให้ leaf generate **legal เต็ม** (แพงกว่า pseudo-legal)
+- ผลขัดแย้ง: ได้ reuse แต่เสียการประหยัด → **yield ต่ำ ไม่คุ้มความซับซ้อน** จึงข้าม
+
+### 6.4 ตรวจสอบ
+- `tsc --noEmit` ✅
+- `npm test` (20 tests, 80ms) ✅
+- `npm run test:perf` (depth4=1,437ms) ✅
+- ตั้ง default depth = 4 → กลางเกม ~1.4s ✓ (ถึงเป้า <1-2s)
+
+### 6.5 ทางเลือก tuning ต่อ (ถ้าต้องการ depth 5)
+- depth 5 ยัง ~9s — ต้อง optimize อื่นเพิ่ม (เช่น ลด branching ด้วย Null Move Pruning, LMR, เพิ่ม TT efficiency)
+- ถ้าไม่ต้องการลึกมาก ปิด depth5 ไปตั้ง 4 ก็พอ

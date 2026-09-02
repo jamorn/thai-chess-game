@@ -106,11 +106,28 @@ export class Evaluator {
   private static readonly PASSED_PAWN_BONUS = 25;
 
   /**
+   * Lazy Evaluation Threshold
+   * ถ้าผลต่าง Material+PST ระหว่างสองฝั่งห่างกันมากเกินไปกว่าค่านี้
+   * จะถือว่า "นำ/ตามชัด" แล้ว - ข้ามการคำนวณ Mobility (ราคาแพง) เพราะไม่กี่แต้ม
+   * ของ Mobility ไม่สามารถชดเชยแต้มต่างของหมากได้
+   * ตั้ง ~แค่เรื่องเรือเดียว (500) เป็นหลัก
+   */
+  private static readonly LAZY_EVAL_THRESHOLD = 450;
+
+  /**
    * Full evaluation (Material + PST + Mobility + Pawn structure)
    * ใช้ที่ minimax leaf เท่านั้น ราคาแพงกว่า evaluateStatic เล็กน้อย
    */
   public static evaluate(board: Board, aiSide: Side): number {
-    let score = this.evaluateStatic(board, aiSide);
+    const material = this.evaluateStatic(board, aiSide);
+
+    // Lazy Evaluation: ต่างกันเกิน threshold -> ตัดสินด้วย material+PST อย่างเดียว
+    // ประหยัดการ generate pseudo-legal moves (ray-cast) ที่ leaf จำนวนมหาศาล
+    if (Math.abs(material) > this.LAZY_EVAL_THRESHOLD) {
+      return material;
+    }
+
+    let score = material;
 
     // Positional features (Mobility / King Safety / Passed Pawn)
     score += this.mobilityScore(board, aiSide);
@@ -151,13 +168,14 @@ export class Evaluator {
   }
 
   /**
-   * Mobility: ฝั่งที่หมากเดินได้ช่องมากกว่า ถือว่าครองพื้นที่ / มีตัวเลือกดีกว่า
-   * ใช้จำนวน legal moves ของทั้งสองฝั่ง (คำนวณจาก getLegalMovesForSide)
+   * Mobility: ฝั่งที่หมาก "แตะถึง" ช่องได้มากกว่า ถือว่าครองพื้นที่ / มีตัวเลือกดีกว่า
+   * ใช้ Pseudo-Legal moves (countPseudoLegalMovesForSide) ซึ่งไม่ต้องตรวจ isKingInCheck
+   * + ไม่ต้อง makeMove/undoMove -> ประหยัด overhead มากเมื่อเทียบกับ getLegalMovesForSide
    */
   private static mobilityScore(board: Board, aiSide: Side): number {
     const enemySide = aiSide === Side.RED ? Side.BLACK : Side.RED;
-    const myMoves = board.getLegalMovesForSide(aiSide).length;
-    const oppMoves = board.getLegalMovesForSide(enemySide).length;
+    const myMoves = board.countPseudoLegalMovesForSide(aiSide);
+    const oppMoves = board.countPseudoLegalMovesForSide(enemySide);
     return (myMoves - oppMoves) * this.MOBILITY_WEIGHT;
   }
 
