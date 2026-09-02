@@ -37,6 +37,8 @@
       }
       .main-content {
         display: flex;
+        flex-direction: column;
+        align-items: center;
         gap: 10px;
         padding: 10px;
       }
@@ -124,6 +126,114 @@
         font-weight: bold;
       }
 
+      /* ✅ ใหม่: ประวัติการเดิน — เป็นหน่วยแยกจากกระดาน (โค๊แล็ปซ/ขยายเองได้)
+         ค่าเริ่มต้น .hidden ทำให้กดปุ่มถึงจะโผล่ เพื่อไม่แย่งพื้นที่board */
+      .history-section {
+        padding: 3px 10px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .win95-btn {
+        font-family: "Tahoma", "Segoe UI", sans-serif;
+        font-size: 12px;
+        padding: 3px 8px;
+        background: #c0c0c0;
+        border: 2px solid;
+        border-color: #ffffff #808080 #808080 #ffffff;
+        cursor: pointer;
+        align-self: flex-start;
+      }
+      .win95-btn:active {
+        border-color: #808080 #ffffff #ffffff #808080;
+      }
+      .history-box.hidden {
+        display: none;
+      }
+
+      /* ---- ป้ายบอกช่องแบบหมากรุกไทย (rank 1-8 / file ก...) ---- */
+      .chess-frame {
+        position: relative;
+        display: inline-block;
+      }
+      .coord-coord {
+        position: absolute;
+        font-family: "Tahoma", "Segoe UI", sans-serif;
+        font-size: 11px;
+        font-weight: bold;
+        transform: translateY(-50%);
+        pointer-events: none;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .coord-file {
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 2px;
+        padding: 0 2px;
+      }
+      /* จอเล็ก จัดให้ป้ายเล็กลงตาม เพื่อไม่ทับกันเวลา board เล็กลง */
+      @media (max-width: 560px) {
+        .coord-coord {
+          font-size: 8px;
+        }
+        .coord-rank {
+          left: -10px;
+        }
+      }
+      @media (orientation: landscape) and (max-height: 620px) {
+        .coord-coord {
+          font-size: 8px;
+        }
+      }
+
+      /* ---------- Responsive (จอเล็ก) ---------- */
+      /* 模式ล็อกให้เล่นแนวตั้งเท่านั้น: หมุนจอแนวนอนจะแสดง modal บอก ไม่ใช่ปรับ CSS */
+      .rotate-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.72);
+        backdrop-filter: blur(2px);
+        font-family: "Tahoma", "Segoe UI", sans-serif;
+        color: #fff;
+      }
+      .rotate-modal.open {
+        display: flex;
+      }
+      /* หากล็อก orientation: หยุด scroll หลัง modal */
+      body.rotation-locked {
+        overflow: hidden;
+      }
+      .rotate-modal__box {
+        background: #c0c0c0;
+        color: #111;
+        max-width: min(420px, 90vw);
+        margin: 12px;
+        padding: 18px 20px;
+        text-align: center;
+        border: 2px solid;
+        border-color: #ffffff #808080 #808080 #ffffff;
+        box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
+      }
+      .rotate-modal__icon {
+        font-size: 42px;
+        line-height: 1;
+        margin-bottom: 8px;
+      }
+      .rotate-modal__box h2 {
+        margin: 6px 0 8px;
+        font-size: 17px;
+      }
+      .rotate-modal__box p {
+        margin: 0;
+        font-size: 13px;
+        color: #333;
+      }
+
       /* ---------- Responsive (จอเล็ก) ---------- */
       /* ขนาด cell จัดการด้วย clamp() อัตโนมัติ => ไม่จำเป็นต้อง media query fix ขนาด */
       /* เมื่อจอแคบ (vertical) ให้ history ย้ายไปอยู่ใต้กระดาน ไม่ผลักข้าง */
@@ -143,27 +253,47 @@
          เพื่อให้กระดานใช้พื้นที่แนวขวาง/แนวตั้งได้เต็ม ไม่ถูก sidebar ริมกินพื้นที่ */
       @media (orientation: landscape) and (max-height: 620px) {
         body {
-          padding: 4px;
+          padding: 2px;
         }
         .win95-window {
           max-width: 100%;
         }
+        .title-bar {
+          font-size: 11px;
+          padding: 2px 5px;
+        }
         .main-content {
           flex-direction: column;
           align-items: center;
-          padding: 4px;
-          gap: 4px;
+          padding: 2px;
+          gap: 3px;
         }
         .board-container {
           flex-shrink: 0;
         }
-        .sidebar {
-          width: 100%;
-          flex-direction: row;
+        /* จอเตี้ยแนวนอน: ให้ cell หดตาม height (ไม่ผูก clamp 80px เต็ม) -->
+           ทั้ง board ปุ่ม file + status ฟิตอยู่ในความสูง view พอดี ไม่ overflow */
+        table.chess-board-win95 td {
+          width: clamp(14px, calc(min(100vw - 24px, 100vh - 150px) / 8), 78px);
+          height: clamp(14px, calc((100vh - 150px) / 8), 78px);
         }
-        .history-box {
-          height: 60px;
-          flex: 1;
+        .history-section {
+          padding: 1px 8px 0;
+          gap: 2px;
+        }
+        .coord-coord {
+          font-size: 8px;
+        }
+        .status-bar {
+          padding: 2px;
+          font-size: 11px;
+        }
+        /* กันไม่ให้ content ยืดเต็มวิว: ให้ window/ส่วนหลักพอดีกับ board แล้วกลาง */
+        .win95-window {
+          width: fit-content;
+        }
+        .main-content {
+          width: fit-content;
         }
       }
     </style>
@@ -176,14 +306,40 @@
       </div>
       <div class="main-content">
         <div id="board-container" class="board-container"></div>
-        <div class="sidebar">
-          <div class="history-box">
-            <ul id="history-list"></ul>
-          </div>
+      </div>
+
+      <!-- ✅ ย้าย "ประวัติการเดิน" ออกจากบริเวณข้างกระดาน ไปเป็นหน่วยแยกต่างหาก
+           โดยค่าเริ่มต้นซ่อน/ย่อไว้ (collapsed) — ผู้เล่นกดปุ่มด้านล่างเพื่อเปิดดูเองได้
+           เพื่อไม่ให้กล่องประวัติแย่งพื้นที่หรือติดกับกระดาน -->
+      <div class="history-section">
+        <button
+          id="toggle-history-btn"
+          class="win95-btn"
+          type="button"
+          onclick="var b=document.getElementById('history-box'); var h=b.classList.toggle('hidden'); this.textContent = h ? '▶ ประวัติการเดิน (เปิดดู)' : '▼ ประวัติการเดิน (ซ่อน)';"
+        >
+          ▶ ประวัติการเดิน (เปิดดู)
+        </button>
+        <div id="history-box" class="history-box hidden">
+          <ul id="history-list"></ul>
         </div>
       </div>
+
       <div id="status-bar" class="status-bar">พร้อมใช้งาน</div>
     </div>
+
+    <!-- Modal: บังคับเล่นแนวตั้ง ถ้าผู้ใช้หมุนเป็นแนวนอน -->
+    <div id="rotate-modal" class="rotate-modal" aria-live="polite">
+      <div class="rotate-modal__box" role="alertdialog" aria-label="ต้องใช้แนวตั้ง">
+        <div class="rotate-modal__icon">🔄️</div>
+        <h2>กรุณาหมุนเป็นแนวตั้ง</h2>
+        <p>เกมนี้รองรับการเล่นแบบแนวตั้ง</p>
+        <p>หมุนจอกลับมาแนวตั้งก็เล่นต่อได้ทันที</p>
+      </div>
+    </div>
+
+    <!-- Self-host UI (แยกจาก main/business) -- ตาม "ห้าม pollute main.ts" -->
+    <script type="module" src="/src/ui/AiChallengeModal.ts"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

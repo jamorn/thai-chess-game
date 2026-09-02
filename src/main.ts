@@ -8,6 +8,7 @@ import { DEFAULT_SEARCH_DEPTH } from "./engine/engineConfig";
 import { BoardView } from "./ui/BoardView";
 import { MoveHistoryView } from "./ui/MoveHistoryView";
 import { TrashTalker } from "./ui/TrashTalker";
+import { initPortraitLock } from "./ui/portraitLock";
 
 class ThaiChessApp {
   private board: Board;
@@ -94,5 +95,7 @@ class ThaiChessApp {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  initPortraitLock(); // ล็อกให้เล่นแนวตั้ง (modal เมื่อหมุน landscape)
   new ThaiChessApp();
 });
+

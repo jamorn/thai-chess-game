@@ -85,7 +85,45 @@ export class BoardView {
       table.appendChild(tr);
     }
 
-    this.container.appendChild(table);
+    // ---- ห่อกระดานไว้ใน frame เพื่อใส่ "ตัวบอกช่อง" (rank 1..8 & file ก..) ---
+    const frame = document.createElement("div");
+    frame.className = "chess-frame";
+    frame.appendChild(table);
+    this.container.appendChild(frame);
+
+    // วัดขนาดจริงของboard (cell มีขนาด clamp ได้) เพื่อวางป้ายให้ตรงช่อง/เสมอตัด
+    const cellW = table.clientWidth / 8;
+    const cellH = table.clientHeight / 8;
+    const padRowColour = "#3a5a2f";
+
+    // ❶ ตัวบอก "แถว" ทางด้านซ้าย: ล่างขึ้นบน = 1..8  (แดงอยู่ล่าง)
+    //    ป้ายนี้ถูกหมุนพร้อม board (อยู่ใน frame เดียวกัน) => เมื่อใช้ rotate ป้ายจะตามไปถูกภาพ
+    const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"]; // r0(บนสุด)=8 ... r7=1
+    ranks.forEach((txt, physicalRow) => {
+      const el = document.createElement("span");
+      el.className = "coord-coord coord-rank";
+      el.textContent = txt;
+      el.style.top = `${physicalRow * cellH + cellH / 2}px`;
+      el.style.left = "-14px";               // อยู่ด้านนอกกระดานด้านซ้าย
+      el.style.color = padRowColour;
+      frame.appendChild(el);
+    });
+
+    // ❷ ตัวบอก "คอลัมน์" ด้านล่าง: ซ้าย ->
+    const files = ["ก", "ข", "ค", "ง", "จ", "ฉ", "ช", "ญ"]; // 8 ช่องทางซ้าย→ขวา
+    files.forEach((txt, c) => {
+      const el = document.createElement("span");
+      el.className = "coord-coord coord-file";
+      el.textContent = txt;
+      // ใช้ cellW ที่วัดไว้แล้ว (ไม่ซ้ำการคำนวณซ้าย)
+      el.style.left = `${(c + 0.5) * cellW}px`;
+      el.style.top = `${table.clientHeight + 2}px`; // ใต้ขอบ board พอดี
+      el.style.color = padRowColour;
+      frame.appendChild(el);
+    });
+
+    // จองพื้นที่ด้านล่างเล็กน้อยให้ตัว file เห็นชัด ไม่ถูกของถัดไปทับ
+    frame.style.padding = "0 0 16px 0";
   }
 
   private handleClick(
