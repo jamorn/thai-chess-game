@@ -32,6 +32,8 @@ export class Board {
   }
 
   public setupDefaultBoard(): void {
+    // เรือ -> ม้า -> โคน -> ขุน -> เม็ด -> โคน -> ม้า -> เรือ
+    // (จากซ้าย: col3 ขุน(King), col4 เม็ด(Met)) — ทั้ง 2 ฝั่ง
     this.grid[0][0] = new Rook(Side.BLACK);
     this.grid[0][1] = new Horse(Side.BLACK);
     this.grid[0][2] = new Khon(Side.BLACK);
@@ -46,11 +48,12 @@ export class Board {
       this.grid[5][col] = new Pawn(Side.RED);
     }
 
+    // RED (row 7) mirror สมมาตรกับ BLACK (col3 ขุน / col4 เม็ด)
     this.grid[7][0] = new Rook(Side.RED);
     this.grid[7][1] = new Horse(Side.RED);
     this.grid[7][2] = new Khon(Side.RED);
-    this.grid[7][3] = new Met(Side.RED);
-    this.grid[7][4] = new King(Side.RED);
+    this.grid[7][3] = new King(Side.RED);
+    this.grid[7][4] = new Met(Side.RED);
     this.grid[7][5] = new Khon(Side.RED);
     this.grid[7][6] = new Horse(Side.RED);
     this.grid[7][7] = new Rook(Side.RED);
